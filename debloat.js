@@ -185,12 +185,23 @@ async function main() {
   }
 
   for (const pkg of toDisable) {
-    console.log(`Disabling: ${pkg}`);
+    process.stdout.write(`Disabling: ${pkg} ... `);
     try {
       const out = adb(`shell pm disable-user --user 0 ${pkg}`, { allowFail: true }).trim();
-      console.log(`  -> ${out || 'done'}`);
+      if (/disabled/i.test(out)) {
+        console.log('\x1b[32mdisabled\x1b[0m');
+      } else if (/SecurityException|Cannot disable/i.test(out)) {
+        const out2 = adb(`shell pm uninstall -k --user 0 ${pkg}`, { allowFail: true }).trim();
+        if (/success/i.test(out2)) {
+          console.log('\x1b[32muninstalled for user\x1b[0m');
+        } else {
+          console.log(`\x1b[31mFAILED: ${out2}\x1b[0m`);
+        }
+      } else {
+        console.log(`\x1b[31mFAILED: ${out}\x1b[0m`);
+      }
     } catch (e) {
-      console.error(`  -> ERROR: ${e.message}`);
+      console.error(`\x1b[31mERROR: ${e.message}\x1b[0m`);
     }
   }
 

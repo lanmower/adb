@@ -37,6 +37,15 @@ disable_pkg() {
   if echo "$result" | grep -qi "disabled"; then
     log_disabled "$pkg"
     ((disabled++))
+  elif echo "$result" | grep -qi "SecurityException\|Cannot disable"; then
+    result=$("$ADB" shell pm uninstall -k --user 0 "$pkg" 2>&1)
+    if echo "$result" | grep -qi "success"; then
+      log_disabled "$pkg (uninstalled for user)"
+      ((disabled++))
+    else
+      log_failed "$pkg ($result)"
+      ((failed++))
+    fi
   else
     log_failed "$pkg ($result)"
     ((failed++))
