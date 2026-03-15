@@ -2,7 +2,6 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const readline = require('readline');
 
 const CORE_SAFE_LIST = new Set([
   'android',
@@ -149,66 +148,33 @@ async function main() {
 
   const toDisable = [];
   const actionable = packages.filter(p => !p.core);
-  let i = 0;
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const keypress = () => new Promise(resolve => {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.once('data', buf => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      resolve(buf.toString().toLowerCase());
+    });
+  });
 
-  const ask = (prompt) => new Promise(resolve => rl.question(prompt, resolve));
+  console.log('Controls: [d] disable  [k] keep  [s] skip remaining system  [q] quit & apply\n');
 
-  let skipAllSystem = false;
-
-  while (i < actionable.length) {
-    const page = actionable.slice(i, i + 20);
-    console.log(`\n--- Packages ${i + 1}-${i + page.length} of ${actionable.length} ---`);
-    for (let j = 0; j < page.length; j++) {
-      const p = page[j];
-      const idx = pad(i + j + 1, 4);
-      const ram = pad(p.rssMB + 'MB', 7);
-      const type = p.isSystem ? '[system]' : '[user]  ';
-      console.log(`[${idx}] ${ram}  ${rpad(p.pkg, 50)} ${type}`);
-    }
-
-    const ans = await ask('\n(d)isable all on page / (k)eep all on page / (s)kip all system / (i)nteractive / (q)uit & apply: ');
-    const cmd = ans.trim().toLowerCase();
-
-    if (cmd === 'q') break;
-    if (cmd === 's') {
-      skipAllSystem = true;
-      i += page.length;
-      continue;
-    }
-    if (cmd === 'd') {
-      for (const p of page) {
-        if (skipAllSystem && p.isSystem) continue;
-        toDisable.push(p.pkg);
-      }
-      i += page.length;
-      continue;
-    }
-    if (cmd === 'k') {
-      i += page.length;
-      continue;
-    }
-    if (cmd === 'i') {
-      for (let j = 0; j < page.length; j++) {
-        const p = page[j];
-        if (skipAllSystem && p.isSystem) continue;
-        const idx = pad(i + j + 1, 4);
-        const ram = pad(p.rssMB + 'MB', 7);
-        const type = p.isSystem ? '[system]' : '[user]  ';
-        const a = await ask(`[${idx}] ${ram} ${p.pkg} ${type} -- (d)isable/(k)eep/(s)kip rest system/(q)uit: `);
-        const c = a.trim().toLowerCase();
-        if (c === 'd') toDisable.push(p.pkg);
-        else if (c === 's') { skipAllSystem = true; }
-        else if (c === 'q') { i = actionable.length; break; }
-      }
-      i += page.length;
-      continue;
-    }
-    console.log('Unknown command. Use d/k/s/i/q.');
+  let skipSystem = false;
+  for (let i = 0; i < actionable.length; i++) {
+    const p = actionable[i];
+    if (skipSystem && p.isSystem) continue;
+    const idx = pad(i + 1, 4);
+    const ram = pad(p.rssMB > 0 ? p.rssMB + 'MB' : '---', 7);
+    const type = p.isSystem ? '\x1b[33m[system]\x1b[0m' : '\x1b[32m[user]  \x1b[0m';
+    process.stdout.write(`[${idx}/${actionable.length}] ${ram}  ${rpad(p.pkg, 50)} ${type}  `);
+    const key = await keypress();
+    if (key === 'd') { toDisable.push(p.pkg); process.stdout.write('\x1b[31mDISABLE\x1b[0m\n'); }
+    else if (key === 's') { skipSystem = true; process.stdout.write('skip system\n'); }
+    else if (key === 'q' || key === '\x03') { process.stdout.write('quit\n'); break; }
+    else { process.stdout.write('keep\n'); }
   }
-
-  rl.close();
 
   console.log(`\n=== Summary ===`);
   console.log(`Packages to disable: ${toDisable.length}`);
