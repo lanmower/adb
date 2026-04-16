@@ -2,3 +2,4 @@ debloat.exe
 debloat-test.exe
 node_modules/
 .gm-stop-verified
+config.bat
